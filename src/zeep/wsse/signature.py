@@ -28,19 +28,20 @@ SOAP_NS = 'http://schemas.xmlsoap.org/soap/envelope/'
 class Signature(object):
     """Sign given SOAP envelope with WSSE sig using given key and cert."""
 
-    def __init__(self, key_file, certfile, password=None):
+    def __init__(self, key_file=None, certfile=None, password=None, cert_format=None):
         check_xmlsec_import()
 
         self.key_file = key_file
         self.certfile = certfile
         self.password = password
+        self.cert_format = cert_format
 
     def apply(self, envelope, headers):
-        sign_envelope(envelope, self.key_file, self.certfile, self.password)
+        sign_envelope(envelope, self.key_file, self.certfile, self.password, self.cert_format)
         return envelope, headers
 
     def verify(self, envelope):
-        verify_envelope(envelope, self.certfile)
+        verify_envelope(envelope, self.certfile or self.key_file)
         return envelope
 
 
@@ -53,7 +54,7 @@ def check_xmlsec_import():
         )
 
 
-def sign_envelope(envelope, keyfile, certfile, password=None):
+def sign_envelope(envelope, keyfile=None, certfile=None, password=None, cert_format=None):
     """Sign given SOAP envelope with WSSE sig using given key and cert.
 
     Sign the wsu:Timestamp node in the wsse:Security header and the soap:Body;
@@ -156,8 +157,11 @@ def sign_envelope(envelope, keyfile, certfile, password=None):
     xmlsec.template.x509_data_add_certificate(x509_data)
 
     # Load the signing key and certificate.
-    key = xmlsec.Key.from_file(keyfile, xmlsec.KeyFormat.PEM, password=password)
-    key.load_cert_from_file(certfile, xmlsec.KeyFormat.PEM)
+    if not cert_format:
+        cert_format = xmlsec.KeyFormat.PEM
+    key = xmlsec.Key.from_file(keyfile or certfile, cert_format, password=password)
+    if keyfile and certfile:
+        key.load_cert_from_file(certfile, cert_format)
 
     # Insert the Signature node in the wsse:Security header.
     security = get_security_header(envelope)
@@ -184,7 +188,7 @@ def sign_envelope(envelope, keyfile, certfile, password=None):
     sec_token_ref.append(x509_data)
 
 
-def verify_envelope(envelope, certfile):
+def verify_envelope(envelope, certfile, cert_format=None):
     """Verify WS-Security signature on given SOAP envelope with given cert.
 
     Expects a document like that found in the sample XML in the ``sign()``
@@ -216,7 +220,9 @@ def verify_envelope(envelope, certfile):
         )[0]
         ctx.register_id(referenced, 'Id', ns.WSU)
 
-    key = xmlsec.Key.from_file(certfile, xmlsec.KeyFormat.CERT_PEM, None)
+    if not cert_format:
+        cert_format = xmlsec.KeyFormat.CERT_PEM
+    key = xmlsec.Key.from_file(certfile, cert_format, None)
     ctx.key = key
 
     try:
