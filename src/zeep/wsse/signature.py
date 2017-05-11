@@ -41,7 +41,7 @@ class Signature(object):
         return envelope, headers
 
     def verify(self, envelope):
-        verify_envelope(envelope, self.certfile or self.key_file)
+        verify_envelope(envelope, self.certfile or self.key_file, self.cert_format)
         return envelope
 
 
